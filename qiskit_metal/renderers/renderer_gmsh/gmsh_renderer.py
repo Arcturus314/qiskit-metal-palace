@@ -17,6 +17,9 @@ if not config.is_building_docs():
     from qiskit_metal.toolbox_python.utility_functions import clean_name
     from qiskit_metal.toolbox_python.utility_functions import bad_fillet_idxs
 
+#gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
+
+
 
 class QGmshRenderer(QRenderer):
     """Extends QRendererAnalysis class to export designs to Gmsh using the Gmsh python API.
@@ -92,6 +95,7 @@ class QGmshRenderer(QRenderer):
         self.layer_types = default_layer_types if layer_types is None else layer_types
 
         self.bounds_handler = BoundsForPathAndPolyTables(self.design)
+        #gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
 
     @property
     def initialized(self):
@@ -141,6 +145,7 @@ class QGmshRenderer(QRenderer):
     def _initiate_renderer(self):
         """Initializes the Gmsh renderer"""
         gmsh.initialize()
+        gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
         return True
 
     def _close_renderer(self):
@@ -918,6 +923,9 @@ class QGmshRenderer(QRenderer):
         """
         layer_numbers = list(set(l for l in self.design.ls.ls_df["layer"]))
         for layer in layer_numbers:
+
+            qcomponents_metal_tags = [] # tags for all qcomponents in 'metal' physical group
+
             # TODO: check if thickness == 0, then fragment differently
             layer_thickness = self.get_thickness_for_layer_datatype(
                 layer_num=layer)
@@ -934,7 +942,9 @@ class QGmshRenderer(QRenderer):
                 layer_geoms = dict(self.paths_dict[layer],
                                    **self.polys_dict[layer])
                 for name, tag in layer_geoms.items():
+                    print("layer_geom items:",layer_geoms.items())
                     if layer_dim == 3:
+                        print("adding mesh element; layer_dim == 3")
                         tags = gmsh.model.occ.getSurfaceLoops(tag[0])[1][0]
                         metal_layer = True if layer in self.layer_types[
                             "metal"] else False
@@ -948,10 +958,19 @@ class QGmshRenderer(QRenderer):
                             dim=2, tags=tags, name=f"{name}_sfs")
                         self.physical_groups[layer][f"{name}_sfs"] = ph_sfs_tag
                     else:
-                        ph_tag = gmsh.model.addPhysicalGroup(dim=layer_dim,
-                                                             tags=tag,
-                                                             name=name)
-                        self.physical_groups[layer][name] = ph_tag
+                        print("adding qcomponent mesh element; layer_dim == 2")
+                        if "qport" in name or "die" in name:
+                            print("--> qport, overriding physical tag")
+                            ph_tag = gmsh.model.addPhysicalGroup(dim=layer_dim,
+                                                                 tags=tag,
+                                                                 name=name)
+                            self.physical_groups[layer][name] = ph_tag
+                        else:
+                            qcomponents_metal_tags.append(tag[0])
+                            #ph_tag = gmsh.model.addPhysicalGroup(dim=layer_dim,
+                            #                                     tags=tag,
+                            #                                     name=name)
+
 
                 # TODO: Do we require 3D junctions? Active issue: #842
                 for name, tag in self.juncs_dict[layer].items():
@@ -959,6 +978,7 @@ class QGmshRenderer(QRenderer):
                                                               tags=tag,
                                                               name=name)
                     self.physical_groups[layer][name] = ph_junc_tag
+
 
             # Make physical groups for each layer
             if self.layer_types is None:
@@ -1007,10 +1027,16 @@ class QGmshRenderer(QRenderer):
                         self.physical_groups[layer][
                             f"{layer_name}_sfs"] = ph_sfs_tag
                     else:
-                        ph_tag = gmsh.model.addPhysicalGroup(dim=layer_dim,
-                                                             tags=layer_tag,
-                                                             name=layer_name)
-                        self.physical_groups[layer][layer_name] = ph_tag
+                        if layer_type == "ground_plane":
+                            qcomponents_metal_tags.append(layer_tag[0])
+                        else:
+                            ph_tag = gmsh.model.addPhysicalGroup(dim=layer_dim,
+                                                                 tags=layer_tag,
+                                                                 name=layer_name)
+                            self.physical_groups[layer][layer_name] = ph_tag
+
+            print("adding tags to metal group",qcomponents_metal_tags)
+            gmsh.model.addPhysicalGroup(dim=layer_dim,tags=qcomponents_metal_tags,name="metal")
 
         if draw_sample_holder:
             # Make physical groups for vacuum box (volume)
