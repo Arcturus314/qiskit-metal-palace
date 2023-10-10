@@ -76,6 +76,7 @@ class QGmshRenderer(QRenderer):
                  design: 'MultiPlanar',
                  layer_types: Union[dict, None] = None,
                  initiate=True,
+                 separate_component_groups=False,
                  options: Dict = None):
         """
         Args:
@@ -90,6 +91,8 @@ class QGmshRenderer(QRenderer):
                          initiate=initiate,
                          render_options=options)
         self._model_name = "gmsh_model"
+        
+        self.separate_component_groups=separate_component_groups
 
         default_layer_types = dict(metal=[1], dielectric=[3])
         self.layer_types = default_layer_types if layer_types is None else layer_types
@@ -959,8 +962,8 @@ class QGmshRenderer(QRenderer):
                         self.physical_groups[layer][f"{name}_sfs"] = ph_sfs_tag
                     else:
                         print("adding qcomponent mesh element; layer_dim == 2")
-                        if "qport" in name or "die" in name:
-                            print("--> qport, overriding physical tag")
+                        if self.separate_component_groups or "qport" in name or "die" in name:
+                            print("--> overriding physical tag")
                             ph_tag = gmsh.model.addPhysicalGroup(dim=layer_dim,
                                                                  tags=tag,
                                                                  name=name)
