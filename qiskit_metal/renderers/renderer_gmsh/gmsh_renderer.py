@@ -1038,8 +1038,10 @@ class QGmshRenderer(QRenderer):
                                                                  name=layer_name)
                             self.physical_groups[layer][layer_name] = ph_tag
 
-            print("adding tags to metal group",qcomponents_metal_tags)
-            gmsh.model.addPhysicalGroup(dim=layer_dim,tags=qcomponents_metal_tags,name="metal")
+
+            if not self.separate_component_groups:
+                print("adding tags to metal group",qcomponents_metal_tags)
+                gmsh.model.addPhysicalGroup(dim=layer_dim,tags=qcomponents_metal_tags,name="metal")
 
         if draw_sample_holder:
             # Make physical groups for vacuum box (volume)
